@@ -31,7 +31,7 @@ def sync_sheet(worksheet, db):
         print(cell_list)
 
         if row_nr > 0:
-            name, description, url, github, reddit, slack, gitter, blog, wiki, the_etherian, twitter, facebook, contact, tags, license, platform, status, created, last_update, contract_address_mainnet, contract_address_ropsten, logo = cell_list
+            name, teaser, description, url, github, reddit, slack, gitter, blog, wiki, the_etherian, twitter, facebook, contact, tags, license, platform, status, created, last_update, contract_address_mainnet, contract_address_ropsten, logo = cell_list
             tags = [tag.strip().lower() for tag in tags.split(',')]
 
             for tag in tags:
@@ -40,6 +40,7 @@ def sync_sheet(worksheet, db):
 
             attributes = {
                 'row_nr': row_nr,
+                'teaser': teaser,
                 'description': description,
                 'url': url,
                 'github': github,
@@ -89,7 +90,6 @@ def sync_sheet(worksheet, db):
     print "Removing old tags..."
     print db.tags.delete_many({'last_sync': {'$ne': last_sync}}).deleted_count
 
-
 def import_json(filename):
     data = []
     with codecs.open(filename, 'rU', 'utf-8') as f:
@@ -115,6 +115,7 @@ def update_sheet(worksheet, db, data, prune=False):
             print 'New', row['dapp_name']
             output = [
                 row['dapp_name'],
+                row['teaser'],
                 row['description'],
                 row['site'],
                 row['github'],
