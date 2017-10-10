@@ -115,7 +115,7 @@ def update_sheet(worksheet, db, data, prune=False):
             print 'New', row['dapp_name']
             output = [
                 row['dapp_name'],
-                row['teaser'],
+                row.get('teaser', ''),
                 row['description'],
                 row['site'],
                 row['github'],
