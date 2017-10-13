@@ -15,7 +15,7 @@ from slugify import slugify
 import dateutil.parser
 
 DAPPS_SHEET_KEY = '1VdRMFENPzjL2V-vZhcc_aa5-ysf243t5vXlxC2b054g'
-MONGODB_URL = os.getenv('MONGODB_URL', 'mongodb://127.0.0.1:3001/meteor')
+MONGODB_URL = os.getenv('MONGODB_URL', 'mongodb://127.0.0.1:27017/sotd')
 
 def sync_sheet(worksheet, db):
     last_sync = datetime.utcnow()
