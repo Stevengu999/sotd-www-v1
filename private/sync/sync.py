@@ -24,10 +24,11 @@ def sync_row(db, cell_list, row_nr, last_sync, tags_cnt):
         print "Skipping empty line on row", row_nr + 1
         return
 
-    tags = [tag.strip().lower() for tag in tags.split(',')]
-    for tag in tags:
-        if tag:
-            tags_cnt[tag] += 1
+    if tags:
+        tags = [tag.strip().lower() for tag in tags.split(',')]
+        tags_cnt.update(tags)
+    else:
+        tags = []
 
     attributes = {
         'row_nr': row_nr,
