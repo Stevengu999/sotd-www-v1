@@ -17,6 +17,58 @@ import dateutil.parser
 DAPPS_SHEET_KEY = '1VdRMFENPzjL2V-vZhcc_aa5-ysf243t5vXlxC2b054g'
 MONGODB_URL = os.getenv('MONGODB_URL', 'mongodb://127.0.0.1:27017/sotd')
 
+def sync_row(db, cell_list, row_nr, last_sync, tags_cnt):
+    name, teaser, description, url, github, reddit, slack, gitter, blog, wiki, the_etherian, twitter, facebook, contact, tags, license, platform, status, created, last_update, contract_address_mainnet, contract_address_ropsten, logo = cell_list
+
+    if name == '' or status == '' or created == '' or last_update == '':
+        print "Skipping empty line on row", row_nr + 1
+        return
+
+    tags = [tag.strip().lower() for tag in tags.split(',')]
+    for tag in tags:
+        if tag:
+            tags_cnt[tag] += 1
+
+    attributes = {
+        'row_nr': row_nr,
+        'teaser': teaser,
+        'description': description,
+        'url': url,
+        'github': github,
+        'reddit': reddit,
+        'slack': slack,
+        'gitter': gitter,
+        'blog': blog,
+        'wiki': wiki,
+        'the_etherian': the_etherian,
+        'twitter': twitter,
+        'facebook': facebook,
+        'contact': contact,
+        'tags': tags,
+        'license': license,
+        'platform': platform,
+        'slug': slugify(name),
+        'status': status,
+        'created': created,
+        'last_update': last_update,
+        'last_sync': last_sync,
+        'contract_address_mainnet': contract_address_mainnet,
+        'contract_address_ropsten': contract_address_ropsten,
+        'logo': logo,
+    }
+
+    if 'featured' in tags:
+        attributes['featured'] = True
+
+    # remove attributes with empty strings
+    empty_attributes = {}
+    for key, value in attributes.items():
+        if value == '':
+            empty_attributes[key] = True
+            del attributes[key]
+
+    db.dapps.update({'name': name}, {'$set': attributes, '$unset': empty_attributes}, upsert=True)
+
 def sync_sheet(worksheet, db):
     last_sync = datetime.utcnow()
 
@@ -31,52 +83,7 @@ def sync_sheet(worksheet, db):
         print(cell_list)
 
         if row_nr > 0:
-            name, teaser, description, url, github, reddit, slack, gitter, blog, wiki, the_etherian, twitter, facebook, contact, tags, license, platform, status, created, last_update, contract_address_mainnet, contract_address_ropsten, logo = cell_list
-            tags = [tag.strip().lower() for tag in tags.split(',')]
-
-            for tag in tags:
-                if tag:
-                    tags_cnt[tag] += 1
-
-            attributes = {
-                'row_nr': row_nr,
-                'teaser': teaser,
-                'description': description,
-                'url': url,
-                'github': github,
-                'reddit': reddit,
-                'slack': slack,
-                'gitter': gitter,
-                'blog': blog,
-                'wiki': wiki,
-                'the_etherian': the_etherian,
-                'twitter': twitter,
-                'facebook': facebook,
-                'contact': contact,
-                'tags': tags,
-                'license': license,
-                'platform': platform,
-                'slug': slugify(name),
-                'status': status,
-                'created': created,
-                'last_update': last_update,
-                'last_sync': last_sync,
-                'contract_address_mainnet': contract_address_mainnet,
-                'contract_address_ropsten': contract_address_ropsten,
-                'logo': logo,
-            }
-
-            if 'featured' in tags:
-                attributes['featured'] = True
-
-            # remove attributes with empty strings
-            empty_attributes = {}
-            for key, value in attributes.items():
-                if value == '':
-                    empty_attributes[key] = True
-                    del attributes[key]
-
-            db.dapps.update({'name': name}, {'$set': attributes, '$unset': empty_attributes}, upsert=True)
+            sync_row(db, cell_list, row_nr, last_sync, tags_cnt)
 
         row_nr += 1
 
