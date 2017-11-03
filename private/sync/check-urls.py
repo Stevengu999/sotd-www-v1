@@ -13,6 +13,7 @@ IGNORE_STATUSES = ['abandoned']
 URL_FIELDS = ['url', 'github', 'wiki', 'blog', 'twitter', 'facebook', 'slack', 'gitter', 'logo']
 
 REQUEST_TIMEOUT = 30
+VERIFY_SSL = True
 
 def check_url(url):
     code = 0
@@ -20,7 +21,7 @@ def check_url(url):
     error_message = ''
     body = ''
     try:
-        response = requests.get(url, timeout=REQUEST_TIMEOUT)
+        response = requests.get(url, timeout=REQUEST_TIMEOUT, verify=VERIFY_SSL)
         code = response.status_code
         body = response.text
     except requests.exceptions.SSLError as err:
@@ -116,6 +117,10 @@ def check_dapps(db):
                 err_writer.writerow(row)
 
 def main():
+    if not VERIFY_SSL:
+        # disable ssl warning
+        requests.packages.urllib3.disable_warnings()
+
     client = MongoClient(MONGODB_URL)
     db = client.get_default_database()
 
