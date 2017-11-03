@@ -10,10 +10,21 @@ from joblib import Parallel, delayed
 MONGODB_URL = os.getenv('MONGODB_URL', 'mongodb://127.0.0.1:27017/sotd')
 
 IGNORE_STATUSES = ['abandoned']
-URL_FIELDS = ['url', 'github', 'wiki', 'blog', 'twitter', 'facebook', 'slack', 'gitter', 'logo']
+URL_FIELDS = [
+    'url',
+    'github',
+    'wiki',
+    'blog',
+    'twitter',
+    'facebook',
+    'slack',
+    'gitter',
+    'logo']
+CSV_FIELDS = ['dapp', 'field', 'url', 'http_code', 'error', 'message']
 
 REQUEST_TIMEOUT = 30
 VERIFY_SSL = True
+
 
 def check_url(url):
     code = 0
@@ -21,23 +32,13 @@ def check_url(url):
     error_message = ''
     body = ''
     try:
-        response = requests.get(url, timeout=REQUEST_TIMEOUT, verify=VERIFY_SSL)
+        response = requests.get(url,
+                                timeout=REQUEST_TIMEOUT,
+                                verify=VERIFY_SSL)
         code = response.status_code
         body = response.text
-    except requests.exceptions.SSLError as err:
-        error = 'ssl-error'
-        error_message = str(err)
-    except requests.exceptions.ConnectionError as err:
-        error = 'connection-error'
-        error_message = str(err)
-    except requests.exceptions.MissingSchema as err:
-        error = 'missing-schema'
-        error_message = str(err)
-    except requests.exceptions.InvalidSchema as err:
-        error = 'invalid-schema'
-        error_message = str(err)
-    except requests.exceptions.Timeout as err:
-        error = 'timeout'
+    except requests.exceptions.RequestException as err:
+        error = repr(err).split('(')[0]
         error_message = str(err)
 
     if code == 200 and is_parking(body):
@@ -45,28 +46,6 @@ def check_url(url):
         error_message = "domain parking page detected "
 
     return code, error, error_message
-
-TEST_URLS = [
-    # "http://www.stackoverflow.com",
-    # "http://eyepi.com/",
-    # "http://communitycurrency.website/",
-    # "http://dappstore.io",
-    # "http://ethereumwall.com/",
-    # "https://github.com/profeth/",
-    # "http://app.etherdoubler.com/",
-    # "http://insureth.mkvd.net/",
-    # "https://ventureequity.exchange/",
-    # "http://lazooz.org/", # TODO detect
-    # "http://etherscripter.com",
-    # "http://airlock.me/",
-    # "http://atomrigs.blogspot.com",
-    # "http://etherboard.io/",
-    # "http://quorumwallet.com/",
-    # "http://verbatm.info/",
-    # "https://ethereumpyramid.com/",
-    # "http://cryptorps.com/",
-    # "http://jaakme.in/"
-]
 
 
 PARKING_TEXTS = [
@@ -81,11 +60,13 @@ PARKING_TEXTS = [
     "This page has been suspended"
 ]
 
+
 def is_parking(body):
     for text in PARKING_TEXTS:
         if text in body:
             return True
     return False
+
 
 def check_dapp(dapp):
     result = []
@@ -101,20 +82,25 @@ def check_dapp(dapp):
             print("\t".join(err_report))
     return result
 
+
 def check_dapps(db):
     fields = {'slug': 1}
     fields.update({field: 1 for field in URL_FIELDS})
 
-    dapps = db.dapps.find({'url': {'$ne': ''}, 'status': {'$nin': IGNORE_STATUSES}}, fields)
+    dapps = db.dapps.find(
+        {'url': {'$ne': ''}, 'status': {'$nin': IGNORE_STATUSES}},
+        fields)
 
-    result = Parallel(n_jobs=-1, verbose=10)(delayed(check_dapp)(dapp) for dapp in dapps)
+    result = Parallel(n_jobs=-1, verbose=10)(
+        delayed(check_dapp)(dapp) for dapp in dapps)
 
     with open('url_failures.csv', 'wb') as csvfile:
         err_writer = csv.writer(csvfile)
-        err_writer.writerow(['dapp', 'field', 'url', 'http_code', 'error', 'message'])
+        err_writer.writerow(CSV_FIELDS)
         for dapp in result:
             for row in dapp:
                 err_writer.writerow(row)
+
 
 def main():
     if not VERIFY_SSL:
@@ -126,5 +112,7 @@ def main():
 
     check_dapps(db)
 
+
 if __name__ == '__main__':
     main()
+    # print check_url("http://eyepi.com/")
