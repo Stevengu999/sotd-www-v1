@@ -2,28 +2,48 @@
 
 import os
 
+import csv
 import requests
 from pymongo import MongoClient
-import progressbar
+from joblib import Parallel, delayed
 
-MONGODB_URL = os.getenv('MONGODB_URL', 'mongodb://127.0.0.1:3001/meteor')
+MONGODB_URL = os.getenv('MONGODB_URL', 'mongodb://127.0.0.1:27017/sotd')
+
+IGNORE_STATUSES = ['abandoned']
+URL_FIELDS = ['url', 'github', 'wiki', 'blog', 'twitter', 'facebook', 'slack', 'gitter', 'logo']
+
+REQUEST_TIMEOUT = 30
 
 def check_url(url):
     code = 0
-    error = None
+    error = ''
+    error_message = ''
     body = ''
     try:
-        response = requests.get(url)
+        response = requests.get(url, timeout=REQUEST_TIMEOUT)
         code = response.status_code
         body = response.text
     except requests.exceptions.SSLError as err:
-        code = -1
-        error = str(err)
+        error = 'ssl-error'
+        error_message = str(err)
     except requests.exceptions.ConnectionError as err:
-        code = -1
-        error = str(err)
+        error = 'connection-error'
+        error_message = str(err)
+    except requests.exceptions.MissingSchema as err:
+        error = 'missing-schema'
+        error_message = str(err)
+    except requests.exceptions.InvalidSchema as err:
+        error = 'invalid-schema'
+        error_message = str(err)
+    except requests.exceptions.Timeout as err:
+        error = 'timeout'
+        error_message = str(err)
 
-    return code, error, body
+    if code == 200 and is_parking(body):
+        error = 'domain-parking'
+        error_message = "domain parking page detected "
+
+    return code, error, error_message
 
 TEST_URLS = [
     # "http://www.stackoverflow.com",
@@ -66,52 +86,40 @@ def is_parking(body):
             return True
     return False
 
-
-def check_urls(db):
-    bar = progressbar.ProgressBar()
-    dapps = db.dapps.find({'url': {'$ne': ''}, 'status': {'$nin': ['1. Abandoned']}}, {'name': 1, 'url': 1})
-    for dapp in bar(list(dapps)):
-        url = dapp.get('url')
-        # print dapp.get('name'), " Checking ", url, "..."
-
+def check_dapp(dapp):
+    result = []
+    slug = dapp.get('slug')
+    for field in URL_FIELDS:
+        url = dapp.get(field)
         if not url:
             continue
+        code, error, error_message = check_url(url)
+        if code != 200 or error:
+            err_report = [slug, field, url, str(code), error, error_message]
+            result.append(err_report)
+            print("\t".join(err_report))
+    return result
 
-        code, error, body = check_url(url)
-        parking = False
-        if code == 200:
-            parking = is_parking(body)
+def check_dapps(db):
+    fields = {'slug': 1}
+    fields.update({field: 1 for field in URL_FIELDS})
 
-        if code != 200 or parking:
-            print
-            print dapp.get('name'), "\t", url, "\t", str(code), error, parking
-            print
+    dapps = db.dapps.find({'url': {'$ne': ''}, 'status': {'$nin': IGNORE_STATUSES}}, fields)
 
-def check_field_urls(db, field_name):
-    bar = progressbar.ProgressBar()
-    dapps = db.dapps.find({field_name: {'$ne': ''}, 'status': {'$nin': ['1. Abandoned']}}, {'name': 1, field_name: 1})
-    for dapp in bar(list(dapps)):
-        url = dapp.get(field_name)
-        # print dapp.get('name'), " Checking ", url, "..."
+    result = Parallel(n_jobs=-1, verbose=10)(delayed(check_dapp)(dapp) for dapp in dapps)
 
-        if not url:
-            continue
-
-        code, error, body = check_url(url)
-
-        if code != 200:
-            print
-            print dapp.get('name'), "\t", url, "\t", str(code), error
-            print
+    with open('url_failures.csv', 'wb') as csvfile:
+        err_writer = csv.writer(csvfile)
+        err_writer.writerow(['dapp', 'field', 'url', 'http_code', 'error', 'message'])
+        for dapp in result:
+            for row in dapp:
+                err_writer.writerow(row)
 
 def main():
     client = MongoClient(MONGODB_URL)
     db = client.get_default_database()
 
-    check_urls(db)
-    check_field_urls(db, 'github')
-    check_field_urls(db, 'wiki')
-    check_field_urls(db, 'blog')
+    check_dapps(db)
 
 if __name__ == '__main__':
     main()
